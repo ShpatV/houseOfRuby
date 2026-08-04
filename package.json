@@ -10,5 +10,8 @@
   "dependencies": {
     "express": "^4.19.2",
     "multer": "^2.2.0"
+  },
+  "engines": {
+    "node": "18.x"
   }
 }

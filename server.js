@@ -11,7 +11,8 @@ const PORT = process.env.PORT || 3000;
 const EDIT_WINDOW_DAYS = 2;
 const LOCK_MSG = `Ky barazim është i mbyllur (kaluan më shumë se ${EDIT_WINDOW_DAYS} ditë). Vetëm një përdorues me akses të plotë mund ta ndryshojë.`;
 
-const DATA_DIR = path.join(__dirname, 'data');
+// Në Vercel (serverless) e vetmja dosje e shkrueshme është /tmp — por ajo është e përkohshme.
+const DATA_DIR = process.env.VERCEL ? path.join('/tmp', 'data') : path.join(__dirname, 'data');
 const UPLOAD_DIR = path.join(DATA_DIR, 'uploads');
 const DB_FILE = path.join(DATA_DIR, 'db.json');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
@@ -421,6 +422,11 @@ app.use((err, req, res, next) => {
   res.status(400).json({ error: err.message });
 });
 
-app.listen(PORT, () => {
-  console.log(`Barazimet e restorantit -> http://localhost:${PORT}`);
-});
+// Vendore: nis serverin. Në Vercel (serverless) e eksportojmë app-in si handler.
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`Barazimet e restorantit -> http://localhost:${PORT}`);
+  });
+}
+
+module.exports = app;
