@@ -3,6 +3,7 @@ const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { supabase, SUPABASE_URL } = require('./lib/supabase');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -11,11 +12,9 @@ const PORT = process.env.PORT || 3000;
 const EDIT_WINDOW_DAYS = 2;
 const LOCK_MSG = `Ky barazim është i mbyllur (kaluan më shumë se ${EDIT_WINDOW_DAYS} ditë). Vetëm një përdorues me akses të plotë mund ta ndryshojë.`;
 
-// Në Vercel (serverless) e vetmja dosje e shkrueshme është /tmp — por ajo është e përkohshme.
-const DATA_DIR = process.env.VERCEL ? path.join('/tmp', 'data') : path.join(__dirname, 'data');
-const UPLOAD_DIR = path.join(DATA_DIR, 'uploads');
-const DB_FILE = path.join(DATA_DIR, 'db.json');
-const USERS_FILE = path.join(DATA_DIR, 'users.json');
+// Dosje e përkohshme vetëm për upload (multer) — në Vercel përdoret /tmp
+const UPLOAD_DIR = process.env.VERCEL ? path.join('/tmp', 'uploads') : path.join(__dirname, 'data', 'uploads');
+fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 // A është barazimi "i mbyllur" (kaluan më shumë se EDIT_WINDOW_DAYS nga data e tij)
 function isLocked(dateStr) {
@@ -26,72 +25,93 @@ function isLocked(dateStr) {
   return diffDays > EDIT_WINDOW_DAYS;
 }
 
-// Sigurohu qe direktoriumet ekzistojne
-fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-if (!fs.existsSync(DB_FILE)) {
-  fs.writeFileSync(DB_FILE, JSON.stringify({ entries: [] }, null, 2));
+// ---------- Supabase: barazimet (entries) ----------
+async function rowToEntry(row) {
+  return row ? { id: row.id, ...row.data } : null;
+}
+async function selectEntryById(id) {
+  const { data } = await supabase.from('entries').select('id,data').eq('id', id).maybeSingle();
+  return rowToEntry(data);
+}
+async function selectEntryByDateShift(date, shift) {
+  const { data } = await supabase.from('entries').select('id,data').eq('date', date).eq('shift', shift).maybeSingle();
+  return rowToEntry(data);
+}
+async function selectAllEntries({ from, to } = {}) {
+  let q = supabase.from('entries').select('id,data').order('date', { ascending: false });
+  if (from) q = q.gte('date', from);
+  if (to) q = q.lte('date', to);
+  const { data, error } = await q;
+  if (error) throw error;
+  return Promise.all((data || []).map(rowToEntry));
+}
+// Krijo ose përditëso një barazim (id, date, shift ruhen si kolona; pjesa tjetër si JSONB)
+async function upsertEntry(entry) {
+  const { id, date, shift, ...data } = entry;
+  const { error } = await supabase.from('entries').upsert({ id, date, shift, data }, { onConflict: 'id' });
+  if (error) throw error;
+}
+async function deleteEntryById(id) {
+  const { error } = await supabase.from('entries').delete().eq('id', id);
+  if (error) throw error;
 }
 
-// --- Ndihmesa per bazen e te dhenave (JSON i thjeshte) ---
-function readDB() {
-  try {
-    return JSON.parse(fs.readFileSync(DB_FILE, 'utf-8'));
-  } catch (e) {
-    return { entries: [] };
-  }
+// ---------- Supabase: përdoruesit & sesionet ----------
+async function fetchUser(username) {
+  const { data } = await supabase.from('users').select('*').eq('username', username).maybeSingle();
+  return data || null;
 }
-// ① Shkrim ATOMIK: shkruaj në skedar të përkohshëm, pastaj zëvendëso (rename) — kurrë s'prishet
-function writeJsonAtomic(file, data) {
-  const tmp = file + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(data, null, 2));
-  fs.renameSync(tmp, file);
+async function fetchUsersList() {
+  const { data } = await supabase.from('users').select('username,name,role').order('name');
+  return data || [];
 }
-// ② Backup ditor me rrotacion (mban 30 të fundit)
-const BACKUP_DIR = path.join(DATA_DIR, 'backups');
-function backupDB(db) {
-  try {
-    fs.mkdirSync(BACKUP_DIR, { recursive: true });
-    const today = new Date().toISOString().slice(0, 10);
-    fs.writeFileSync(path.join(BACKUP_DIR, `db-${today}.json`), JSON.stringify(db, null, 2));
-    const files = fs.readdirSync(BACKUP_DIR).filter(f => /^db-\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort();
-    while (files.length > 30) { try { fs.unlinkSync(path.join(BACKUP_DIR, files.shift())); } catch (e) {} }
-  } catch (e) { console.error('backup:', e.message); }
+async function insertUser(u) {
+  const { error } = await supabase.from('users').insert({ username: u.username, name: u.name, role: u.role, salt: u.salt, hash: u.hash });
+  if (error) throw error;
 }
-function writeDB(db) {
-  writeJsonAtomic(DB_FILE, db);
-  backupDB(db);
+async function deleteUser(username) {
+  const { error } = await supabase.from('users').delete().eq('username', username);
+  if (error) throw error;
 }
-function newId() {
-  return crypto.randomBytes(8).toString('hex');
+async function updateUserPassword(username, salt, hash) {
+  const { error } = await supabase.from('users').update({ salt, hash }).eq('username', username);
+  if (error) throw error;
 }
-const round2 = n => Math.round((Number(n) || 0) * 100) / 100; // ⑥ rrumbullakim 2 shifra
-
-// ④ Ndihmesa për fshirjen e fotove të palidhura
-function entryPhotos(e) {
-  const urls = [];
-  (e && e.workers || []).forEach(w => (w.expenses || []).forEach(x => (x.photos || []).forEach(p => urls.push(p))));
-  (e && e.expenses || []).forEach(x => (x.photos || []).forEach(p => urls.push(p)));
-  return urls;
+async function fetchSession(token) {
+  const { data } = await supabase.from('sessions').select('token,username,created_at').eq('token', token).maybeSingle();
+  return data ? { token: data.token, username: data.username, createdAt: data.created_at } : null;
 }
-function deletePhotos(urls) {
-  (urls || []).forEach(u => {
-    const name = path.basename(String(u || ''));
-    if (!name) return;
-    const fp = path.join(UPLOAD_DIR, name);
-    if (fp.startsWith(UPLOAD_DIR + path.sep)) { try { fs.unlinkSync(fp); } catch (e) {} }
-  });
+async function insertSession(token, username) {
+  const { error } = await supabase.from('sessions').insert({ token, username });
+  if (error) throw error;
+}
+async function deleteSession(token) {
+  await supabase.from('sessions').delete().eq('token', token);
+}
+async function deleteUserSessions(username) {
+  await supabase.from('sessions').delete().eq('username', username);
+}
+// ③ Sesionet skadojnë pas 30 ditësh
+const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+function sessionExpired(sess) {
+  const t = sess && sess.createdAt ? new Date(sess.createdAt).getTime() : 0;
+  return !t || (Date.now() - t > SESSION_TTL_MS);
+}
+async function pruneSessions() {
+  const cutoff = new Date(Date.now() - SESSION_TTL_MS).toISOString();
+  await supabase.from('sessions').delete().lt('created_at', cutoff);
 }
 
-// ⑦ Regjistër veprimesh (audit log) — mban 1000 të fundit
-const AUDIT_FILE = path.join(DATA_DIR, 'audit.json');
-function logAction(user, action, details = {}) {
+// ---------- Supabase: regjistër veprimesh (audit) ----------
+async function logAction(user, action, details = {}) {
   try {
-    let arr = [];
-    try { arr = JSON.parse(fs.readFileSync(AUDIT_FILE, 'utf-8')); } catch (e) {}
-    arr.push({ at: new Date().toISOString(), user, action, ...details });
-    if (arr.length > 1000) arr = arr.slice(-1000);
-    writeJsonAtomic(AUDIT_FILE, arr);
-  } catch (e) {}
+    await supabase.from('audit_log').insert({ user_name: user, action, details });
+  } catch (e) { console.error('audit:', e.message); }
+}
+async function fetchAudit() {
+  const { data, error } = await supabase.from('audit_log').select('*').order('id', { ascending: false }).limit(100);
+  if (error) throw error;
+  return (data || []).map(r => ({ at: r.at, user: r.user_name, action: r.action, ...(r.details || {}) }));
 }
 
 // ---------- Përdoruesit & autentikimi ----------
@@ -102,42 +122,22 @@ function makeUser(name, role, password) {
   const salt = crypto.randomBytes(16).toString('hex');
   return { username: name.toLowerCase(), name, role, salt, hash: hashPassword(password, salt) };
 }
-function readUsers() {
-  try {
-    return JSON.parse(fs.readFileSync(USERS_FILE, 'utf-8'));
-  } catch (e) {
-    return { users: [], sessions: {} };
-  }
-}
-function writeUsers(data) {
-  writeJsonAtomic(USERS_FILE, data);
-}
-// ③ Sesionet skadojnë pas 30 ditësh
-const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
-function sessionExpired(sess) {
-  const t = sess && sess.createdAt ? new Date(sess.createdAt).getTime() : 0;
-  return !t || (Date.now() - t > SESSION_TTL_MS);
-}
-function pruneSessions(data) {
-  let changed = false;
-  for (const tok of Object.keys(data.sessions || {})) {
-    if (sessionExpired(data.sessions[tok])) { delete data.sessions[tok]; changed = true; }
-  }
-  return changed;
-}
 // Fillimisht krijo 4 përdoruesit (fjalëkalim fillestar: 1234). Blini = akses i plotë.
-if (!fs.existsSync(USERS_FILE)) {
-  const seed = {
-    users: [
-      makeUser('Blini', 'admin', '1234'),
-      makeUser('Dardani', 'user', '1234'),
-      makeUser('Edoni', 'user', '1234'),
-      makeUser('Arti', 'user', '1234')
-    ],
-    sessions: {}
-  };
-  writeUsers(seed);
+const SEED_USERS = [
+  { username: 'blini', name: 'Blini', role: 'admin', salt: '40f6782d8b8c8fb9262ba9e879198b92', hash: '9056805acdc0806cc6c0946008a2bd5643c20e75032976f6a79bcee5539f48c3cbb6c685eabd393adaf51eabbd7a131c33de583318325672d07cdad454dd667f' },
+  { username: 'dardani', name: 'Dardani', role: 'user', salt: 'fcae077bc8d777f9b13cb16086151476', hash: '305be2205efd524f036861b4cd6fca5379b3e1691ed5d0058062ee9baa34af90defc513c00fa7df5cc5a98c319c6d4ab488a2edbe79d48876d94211fe1355edd' },
+  { username: 'edoni', name: 'Edoni', role: 'user', salt: '07c2103f561998b02d9388f3bed6e286', hash: 'e01a47d2fc3742f8d9583a4b1f242b317e4dffd9d180795c99f46fcbbadca67b7a34ef1589cdd7bce46d64b268d04366d66aa0757dc18693b361031add5bd886' },
+  { username: 'arti', name: 'Arti', role: 'user', salt: 'd589dcd45a7e2cde59bcbd2d2dbd06e6', hash: '9217c099116a6601e49f865a82e23390dfb38d5571733a294243c0a060b24e9d73790e40f7f61e255c1c8f689a0846dd7067be4ffb025f213571e1db3c48ed1a' }
+];
+async function seedUsers() {
+  try {
+    const { data, error } = await supabase.from('users').select('username').limit(1);
+    if (error || (data && data.length)) return;
+    await supabase.from('users').insert(SEED_USERS, { onConflict: 'username', ignoreDuplicates: true });
+    console.log('Seed: 4 përdoruesit fillestarë u krijuan.');
+  } catch (e) { console.error('seed:', e.message); }
 }
+seedUsers();
 
 function verifyPassword(user, password) {
   const h = hashPassword(password, user.salt);
@@ -149,16 +149,15 @@ function verifyPassword(user, password) {
 function publicUser(u) { return { username: u.username, name: u.name, role: u.role }; }
 
 // Middleware: kërkon një sesion të vlefshëm
-function requireAuth(req, res, next) {
+async function requireAuth(req, res, next) {
   const token = String(req.headers['x-session-token'] || '');
-  const data = readUsers();
-  const sess = token && data.sessions[token];
+  const sess = token ? await fetchSession(token) : null;
   if (!sess) return res.status(401).json({ error: 'Kërkohet hyrje (login).' });
   if (sessionExpired(sess)) { // ③ sesioni skaduar → hiqe dhe kërko hyrje
-    delete data.sessions[token]; writeUsers(data);
+    await deleteSession(token);
     return res.status(401).json({ error: 'Sesioni skadoi. Hyr përsëri.' });
   }
-  const user = data.users.find(u => u.username === sess.username);
+  const user = await fetchUser(sess.username);
   if (!user) return res.status(401).json({ error: 'Kërkohet hyrje (login).' });
   req.user = user;
   next();
@@ -188,33 +187,43 @@ const upload = multer({
   }
 });
 
+// ④ Ndihmesa për fshirjen e fotove të palidhura (nga Supabase Storage)
+function entryPhotos(e) {
+  const urls = [];
+  (e && e.workers || []).forEach(w => (w.expenses || []).forEach(x => (x.photos || []).forEach(p => urls.push(p))));
+  (e && e.expenses || []).forEach(x => (x.photos || []).forEach(p => urls.push(p)));
+  return urls;
+}
+async function deletePhotos(urls) {
+  const names = (urls || [])
+    .map(u => path.basename(String(u || '').split('?')[0]))
+    .filter(Boolean);
+  if (!names.length) return;
+  try { await supabase.storage.from('photos').remove(names); } catch (e) { console.error('deletePhotos:', e.message); }
+}
+
 app.use(express.json({ limit: '2mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
-app.use('/uploads', express.static(UPLOAD_DIR));
 
 // ---------- Autentikimi ----------
 // Hyrje (login)
-app.post('/api/login', (req, res) => {
+app.post('/api/login', async (req, res) => {
   const username = String((req.body && req.body.username) || '').trim().toLowerCase();
   const password = String((req.body && req.body.password) || '');
-  const data = readUsers();
-  const user = data.users.find(u => u.username === username);
+  const user = await fetchUser(username);
   if (!user || !verifyPassword(user, password)) {
     return res.status(401).json({ error: 'Përdoruesi ose fjalëkalimi gabim.' });
   }
-  pruneSessions(data); // ③ pastro sesionet e skaduara që skedari të mos rritet pafund
+  await pruneSessions(); // ③ pastro sesionet e skaduara që të mos grumbullohen
   const token = crypto.randomBytes(24).toString('hex');
-  data.sessions[token] = { username: user.username, createdAt: new Date().toISOString() };
-  writeUsers(data);
+  await insertSession(token, user.username);
   res.json({ token, user: publicUser(user) });
 });
 
 // Dil (logout)
-app.post('/api/logout', requireAuth, (req, res) => {
+app.post('/api/logout', requireAuth, async (req, res) => {
   const token = String(req.headers['x-session-token'] || '');
-  const data = readUsers();
-  delete data.sessions[token];
-  writeUsers(data);
+  await deleteSession(token);
   res.json({ ok: true });
 });
 
@@ -222,97 +231,91 @@ app.post('/api/logout', requireAuth, (req, res) => {
 app.get('/api/me', requireAuth, (req, res) => res.json({ user: publicUser(req.user) }));
 
 // Ndrysho fjalëkalimin
-app.post('/api/change-password', requireAuth, (req, res) => {
+app.post('/api/change-password', requireAuth, async (req, res) => {
   const oldPassword = String((req.body && req.body.oldPassword) || '');
   const newPassword = String((req.body && req.body.newPassword) || '');
   if (newPassword.length < 4) return res.status(400).json({ error: 'Fjalëkalimi i ri duhet të ketë të paktën 4 shenja.' });
-  const data = readUsers();
-  const user = data.users.find(u => u.username === req.user.username);
-  if (!verifyPassword(user, oldPassword)) return res.status(400).json({ error: 'Fjalëkalimi aktual është gabim.' });
-  user.salt = crypto.randomBytes(16).toString('hex');
-  user.hash = hashPassword(newPassword, user.salt);
-  writeUsers(data);
-  logAction(req.user.name, 'ndryshoi fjalëkalimin e vet');
+  if (!verifyPassword(req.user, oldPassword)) return res.status(400).json({ error: 'Fjalëkalimi aktual është gabim.' });
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = hashPassword(newPassword, salt);
+  await updateUserPassword(req.user.username, salt, hash);
+  await logAction(req.user.name, 'ndryshoi fjalëkalimin e vet');
   res.json({ ok: true });
 });
 
 // Lista e përdoruesve (vetëm për Blinin/adminin)
-app.get('/api/users', requireAuth, requireAdmin, (req, res) => {
-  const data = readUsers();
-  res.json({ users: data.users.map(u => ({ username: u.username, name: u.name, role: u.role })) });
+app.get('/api/users', requireAuth, requireAdmin, async (req, res) => {
+  res.json({ users: await fetchUsersList() });
 });
 
 // Shto një përdorues të ri (vetëm admini)
-app.post('/api/admin/users', requireAuth, requireAdmin, (req, res) => {
+app.post('/api/admin/users', requireAuth, requireAdmin, async (req, res) => {
   const name = String((req.body && req.body.name) || '').trim();
   const password = String((req.body && req.body.password) || '');
   const role = (req.body && req.body.role) === 'admin' ? 'admin' : 'user';
   if (!name) return res.status(400).json({ error: 'Shëno emrin.' });
   if (password.length < 4) return res.status(400).json({ error: 'Fjalëkalimi duhet të ketë të paktën 4 shenja.' });
-  const data = readUsers();
   const username = name.toLowerCase();
-  if (data.users.some(u => u.username === username)) return res.status(400).json({ error: 'Ekziston një përdorues me këtë emër.' });
-  data.users.push(makeUser(name, role, password));
-  writeUsers(data);
-  logAction(req.user.name, 'shtoi përdoruesin', { target: name });
+  if (await fetchUser(username)) return res.status(400).json({ error: 'Ekziston një përdorues me këtë emër.' });
+  await insertUser(makeUser(name, role, password));
+  await logAction(req.user.name, 'shtoi përdoruesin', { target: name });
   res.json({ ok: true, name });
 });
 
 // Fshi një përdorues (vetëm admini) — jo veten
-app.delete('/api/admin/users/:username', requireAuth, requireAdmin, (req, res) => {
+app.delete('/api/admin/users/:username', requireAuth, requireAdmin, async (req, res) => {
   const username = String(req.params.username || '').toLowerCase();
   if (username === req.user.username) return res.status(400).json({ error: 'Nuk mund të fshish veten.' });
-  const data = readUsers();
-  const idx = data.users.findIndex(u => u.username === username);
-  if (idx === -1) return res.status(404).json({ error: 'Nuk u gjet.' });
-  const removedName = data.users[idx].name;
-  data.users.splice(idx, 1);
-  for (const t of Object.keys(data.sessions)) {
-    if (data.sessions[t].username === username) delete data.sessions[t];
-  }
-  writeUsers(data);
-  logAction(req.user.name, 'fshiu përdoruesin', { target: removedName });
+  const user = await fetchUser(username);
+  if (!user) return res.status(404).json({ error: 'Nuk u gjet.' });
+  await deleteUserSessions(username);
+  await deleteUser(username);
+  await logAction(req.user.name, 'fshiu përdoruesin', { target: user.name });
   res.json({ ok: true });
 });
 
 // Rivendos fjalëkalimin e një përdoruesi (vetëm admini) — kur dikush e harron
-app.post('/api/admin/reset-password', requireAuth, requireAdmin, (req, res) => {
+app.post('/api/admin/reset-password', requireAuth, requireAdmin, async (req, res) => {
   const username = String((req.body && req.body.username) || '').trim().toLowerCase();
   const newPassword = String((req.body && req.body.newPassword) || '');
   if (newPassword.length < 4) return res.status(400).json({ error: 'Fjalëkalimi i ri duhet të ketë të paktën 4 shenja.' });
-  const data = readUsers();
-  const user = data.users.find(u => u.username === username);
+  const user = await fetchUser(username);
   if (!user) return res.status(404).json({ error: 'Përdoruesi nuk u gjet.' });
-  user.salt = crypto.randomBytes(16).toString('hex');
-  user.hash = hashPassword(newPassword, user.salt);
-  writeUsers(data);
-  logAction(req.user.name, 'rivendosi fjalëkalimin', { target: user.name });
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = hashPassword(newPassword, salt);
+  await updateUserPassword(username, salt, hash);
+  await logAction(req.user.name, 'rivendosi fjalëkalimin', { target: user.name });
   res.json({ ok: true, name: user.name });
 });
 
 // Regjistri i veprimeve (vetëm admini) — 100 të fundit
-app.get('/api/audit', requireAuth, requireAdmin, (req, res) => {
-  let arr = [];
-  try { arr = JSON.parse(fs.readFileSync(AUDIT_FILE, 'utf-8')); } catch (e) {}
-  res.json({ log: arr.slice(-100).reverse() });
+app.get('/api/audit', requireAuth, requireAdmin, async (req, res) => {
+  res.json({ log: await fetchAudit() });
 });
 
-// Ngarko nje ose disa foto -> kthen emrat e file-ve (kërkon hyrje)
-app.post('/api/upload', requireAuth, upload.array('photos', 10), (req, res) => {
-  const files = (req.files || []).map(f => ({
-    filename: f.filename,
-    url: `/uploads/${f.filename}`
-  }));
+// Ngarko nje ose disa foto -> kthen URL-të publike të Supabase Storage (kërkon hyrje)
+app.post('/api/upload', requireAuth, upload.array('photos', 10), async (req, res) => {
+  const files = [];
+  for (const f of (req.files || [])) {
+    try {
+      const buf = fs.readFileSync(f.path);
+      const { error } = await supabase.storage.from('photos').upload(f.filename, buf, {
+        contentType: f.mimetype,
+        upsert: false
+      });
+      if (error) throw error;
+      files.push({ url: `${SUPABASE_URL}/storage/v1/object/public/photos/${f.filename}` });
+    } catch (e) {
+      console.error('upload:', e.message);
+    }
+    try { fs.unlinkSync(f.path); } catch (e) { /* injoro */ }
+  }
   res.json({ files });
 });
 
 // Merr te gjitha barazimet (me filtrim opsional ?from=YYYY-MM-DD&to=YYYY-MM-DD)
-app.get('/api/entries', requireAuth, (req, res) => {
-  const db = readDB();
-  let entries = db.entries.slice();
-  const { from, to } = req.query;
-  if (from) entries = entries.filter(e => e.date >= from);
-  if (to) entries = entries.filter(e => e.date <= to);
+app.get('/api/entries', requireAuth, async (req, res) => {
+  const entries = await selectAllEntries(req.query);
   // Rendit: data me e re me pare, pastaj dita para nates
   entries.sort((a, b) => {
     if (a.date !== b.date) return b.date.localeCompare(a.date);
@@ -322,9 +325,8 @@ app.get('/api/entries', requireAuth, (req, res) => {
 });
 
 // Merr nje barazim
-app.get('/api/entries/:id', requireAuth, (req, res) => {
-  const db = readDB();
-  const entry = db.entries.find(e => e.id === req.params.id);
+app.get('/api/entries/:id', requireAuth, async (req, res) => {
+  const entry = await selectEntryById(req.params.id);
   if (!entry) return res.status(404).json({ error: 'Nuk u gjet' });
   res.json({ entry });
 });
@@ -361,61 +363,59 @@ function sanitizeEntry(body) {
 }
 
 // Krijo (ose perditeso) barazim — nje i vetem per (date + shift)
-app.post('/api/entries', requireAuth, (req, res) => {
+app.post('/api/entries', requireAuth, async (req, res) => {
   const data = sanitizeEntry(req.body);
   if (!data.date) return res.status(400).json({ error: 'Data mungon' });
   if (isLocked(data.date) && !isFullAccess(req)) return res.status(403).json({ error: LOCK_MSG });
-  const db = readDB();
   const who = req.user.name;
   const now = new Date().toISOString();
   // Nese ekziston nje barazim per te njejten date + nderrim, perditesoje (mos krijo dyfish)
-  const existing = db.entries.find(e => e.date === data.date && e.shift === data.shift);
+  const existing = await selectEntryByDateShift(data.date, data.shift);
   if (existing) {
     const oldPhotos = entryPhotos(existing);
     Object.assign(existing, data, { updatedAt: now, updatedBy: who });
-    writeDB(db);
-    deletePhotos(oldPhotos.filter(p => !entryPhotos(existing).includes(p))); // ④ fshi fotot e hequra
-    logAction(who, 'ndryshoi barazimin', { date: data.date, shift: data.shift }); // ⑦
+    await upsertEntry(existing);
+    await deletePhotos(oldPhotos.filter(p => !entryPhotos(existing).includes(p))); // ④ fshi fotot e hequra
+    await logAction(who, 'ndryshoi barazimin', { date: data.date, shift: data.shift }); // ⑦
     return res.json({ entry: existing });
   }
   const entry = { id: newId(), ...data, createdAt: now, createdBy: who, updatedBy: who };
-  db.entries.push(entry);
-  writeDB(db);
-  logAction(who, 'krijoi barazimin', { date: data.date, shift: data.shift }); // ⑦
+  await upsertEntry(entry);
+  await logAction(who, 'krijoi barazimin', { date: data.date, shift: data.shift }); // ⑦
   res.json({ entry });
 });
 
 // Perditeso barazim
-app.put('/api/entries/:id', requireAuth, (req, res) => {
-  const db = readDB();
-  const idx = db.entries.findIndex(e => e.id === req.params.id);
-  if (idx === -1) return res.status(404).json({ error: 'Nuk u gjet' });
+app.put('/api/entries/:id', requireAuth, async (req, res) => {
+  const existing = await selectEntryById(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'Nuk u gjet' });
   const data = sanitizeEntry(req.body);
-  if ((isLocked(db.entries[idx].date) || isLocked(data.date)) && !isFullAccess(req)) {
+  if ((isLocked(existing.date) || isLocked(data.date)) && !isFullAccess(req)) {
     return res.status(403).json({ error: LOCK_MSG });
   }
-  const oldPhotos = entryPhotos(db.entries[idx]);
-  db.entries[idx] = { ...db.entries[idx], ...data, updatedAt: new Date().toISOString(), updatedBy: req.user.name };
-  writeDB(db);
-  deletePhotos(oldPhotos.filter(p => !entryPhotos(db.entries[idx]).includes(p))); // ④
-  logAction(req.user.name, 'ndryshoi barazimin', { date: data.date, shift: data.shift }); // ⑦
-  res.json({ entry: db.entries[idx] });
+  const oldPhotos = entryPhotos(existing);
+  const next = { ...existing, ...data, updatedAt: new Date().toISOString(), updatedBy: req.user.name };
+  await upsertEntry(next);
+  await deletePhotos(oldPhotos.filter(p => !entryPhotos(next).includes(p))); // ④
+  await logAction(req.user.name, 'ndryshoi barazimin', { date: data.date, shift: data.shift }); // ⑦
+  res.json({ entry: next });
 });
 
 // Fshij barazim
-app.delete('/api/entries/:id', requireAuth, (req, res) => {
-  const db = readDB();
-  const idx = db.entries.findIndex(e => e.id === req.params.id);
-  if (idx === -1) return res.status(404).json({ error: 'Nuk u gjet' });
-  if (isLocked(db.entries[idx].date) && !isFullAccess(req)) {
+app.delete('/api/entries/:id', requireAuth, async (req, res) => {
+  const existing = await selectEntryById(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'Nuk u gjet' });
+  if (isLocked(existing.date) && !isFullAccess(req)) {
     return res.status(403).json({ error: LOCK_MSG });
   }
-  const [removed] = db.entries.splice(idx, 1);
-  writeDB(db);
-  deletePhotos(entryPhotos(removed)); // ④ fshi fotot e barazimit të fshirë
-  logAction(req.user.name, 'fshiu barazimin', { date: removed.date, shift: removed.shift }); // ⑦
-  res.json({ ok: true, removed });
+  await deleteEntryById(existing.id);
+  await deletePhotos(entryPhotos(existing)); // ④ fshi fotot e barazimit të fshirë
+  await logAction(req.user.name, 'fshiu barazimin', { date: existing.date, shift: existing.shift }); // ⑦
+  res.json({ ok: true, removed: existing });
 });
+
+const round2 = n => Math.round((Number(n) || 0) * 100) / 100; // ⑥ rrumbullakim 2 shifra
+const newId = () => crypto.randomBytes(8).toString('hex');
 
 app.use((err, req, res, next) => {
   console.error(err.message);
