@@ -1,0 +1,602 @@
+:root {
+  --bg: #f5f1f1;
+  --card: #ffffff;
+  --primary: #6e1622;      /* rubin */
+  --primary-dark: #551019;
+  --ruby-deep: #4d121a;    /* sfondi i thellë (login/topbar) */
+  --silver: #d9d7d7;       /* argjendi i logos */
+  --text: #2a1519;
+  --muted: #8a7176;
+  --border: #ece2e3;
+  --danger: #c0392b;
+  --green: #15803d;
+  --shadow: 0 1px 3px rgba(80,20,28,0.10);
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  padding-bottom: 40px;
+}
+
+.topbar {
+  background: linear-gradient(135deg, var(--ruby-deep), var(--primary));
+  color: #fff;
+  padding: 12px 16px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.topbar h1 { margin: 0; font-size: 20px; font-weight: 700; }
+
+/* Marka (logo reale) */
+.brand { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.topbar-logo { height: 34px; width: auto; display: block; flex-shrink: 0; }
+.brand-name {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 16px; font-weight: 600; letter-spacing: 2px;
+  color: #efe6e7; white-space: nowrap;
+}
+.brand-name span { font-size: 12px; font-style: italic; letter-spacing: 1px; opacity: .8; }
+.admin-btn {
+  border: 1px solid rgba(255,255,255,.4);
+  background: rgba(255,255,255,.12);
+  color: #fff;
+  border-radius: 20px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.admin-btn.on { background: #fbbf24; color: #78350f; border-color: #fbbf24; }
+
+/* Chip-i i perdoruesit ne topbar */
+.user-chip {
+  border: 1px solid rgba(255,255,255,.4);
+  background: rgba(255,255,255,.12);
+  color: #fff; border-radius: 20px;
+  padding: 6px 12px; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.badge.role { background: #e2e8f0; color: #475569; }
+.badge.role.admin { background: #fef3c7; color: #b45309; }
+.made-by { margin-top: 14px; font-size: 12.5px; color: var(--muted); text-align: center; }
+
+/* Regjistri i veprimeve */
+.audit-log { background: #fff; border-radius: 12px; padding: 6px 12px; box-shadow: var(--shadow); max-height: 240px; overflow-y: auto; }
+.audit-row { display: flex; gap: 8px; padding: 7px 0; border-bottom: 1px dashed var(--border); font-size: 13px; }
+.audit-row:last-child { border-bottom: none; }
+.audit-row .au-when { color: var(--muted); flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.audit-row .au-body { color: var(--text); }
+
+/* Lista e përdoruesve (paneli admin) */
+.user-list { margin-bottom: 6px; }
+.user-row {
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+  padding: 10px 12px; margin-bottom: 8px;
+}
+.ur-name { font-size: 15px; font-weight: 600; }
+.ur-name small { color: var(--muted); font-weight: 400; }
+.ur-del {
+  border: 1px solid #fecaca; background: #fef2f2; color: var(--danger);
+  border-radius: 8px; padding: 6px 10px; font-size: 14px; cursor: pointer;
+}
+
+/* Ekrani i hyrjes (login) — brand House of Ruby */
+.login-screen {
+  min-height: 100vh; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 24px;
+  background: radial-gradient(circle at 50% 30%, #6b1a24, var(--ruby-deep) 75%);
+}
+.login-brand { text-align: center; margin-bottom: 26px; }
+.login-brand .logo-full { width: 280px; max-width: 78vw; height: auto; display: block; margin: 0 auto; }
+.al-card {
+  background: var(--card); border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,.28);
+  padding: 24px 22px; width: 100%; max-width: 380px; text-align: center;
+}
+.al-sub { margin: 0 0 18px; font-size: 14px; color: var(--muted); }
+.al-card h1 { margin: 8px 0 6px; font-size: 22px; }
+.al-card input { font-size: 16px; margin-bottom: 12px; }
+.al-card .btn-primary { width: 100%; }
+.al-msg { min-height: 20px; margin-top: 12px; font-size: 14px; font-weight: 600; }
+.al-msg.ok { color: var(--green); }
+.al-msg.err { color: var(--danger); }
+
+/* Banner i mbylljes ne "Barazim i Ri" */
+.lock-banner {
+  background: #fef3c7; color: #92400e;
+  border: 1px solid #fde68a; border-radius: 12px;
+  padding: 12px 14px; margin-bottom: 12px; font-size: 13.5px; line-height: 1.45;
+}
+.lock-banner.admin { background: #ecfdf5; color: #065f46; border-color: #a7f3d0; }
+
+/* Njoftimi i mbylljes ne panelin e detajeve */
+.lock-note {
+  background: #fef3c7; color: #92400e;
+  border: 1px solid #fde68a; border-radius: 12px;
+  padding: 14px; margin-top: 18px; font-size: 14px; line-height: 1.5; text-align: center;
+}
+.lock-note.admin { background: #ecfdf5; color: #065f46; border-color: #a7f3d0; margin-bottom: 10px; }
+
+.tabs {
+  display: flex;
+  background: var(--primary-dark);
+  position: sticky;
+  top: 52px;
+  z-index: 10;
+}
+.tab {
+  flex: 1;
+  padding: 13px 8px;
+  border: none;
+  background: transparent;
+  color: #cbd5e1;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.tab.active { color: #fff; box-shadow: inset 0 -3px 0 #fff; }
+
+main { padding: 12px; max-width: 640px; margin: 0 auto; }
+
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+.card {
+  background: var(--card);
+  border-radius: 14px;
+  padding: 14px;
+  margin-bottom: 12px;
+  box-shadow: var(--shadow);
+}
+.card h2 { margin: 0 0 10px; font-size: 16px; }
+
+.row { display: flex; gap: 10px; }
+.row .field { flex: 1; }
+
+.field { margin-bottom: 4px; }
+.field label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+
+input, textarea, select {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 16px;
+  background: #fff;
+  color: var(--text);
+}
+input:focus, textarea:focus, select:focus { outline: 2px solid var(--primary); border-color: var(--primary); }
+textarea { resize: vertical; }
+
+/* Nderrimi */
+.shift-toggle { display: flex; gap: 8px; }
+.shift-opt { flex: 1; }
+.shift-opt input { display: none; }
+.shift-opt span {
+  display: block;
+  text-align: center;
+  padding: 11px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+}
+.shift-opt input:checked + span {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+
+/* Kartat e nderrimit me status */
+.lbl-top { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 6px; }
+.shift-switch { display: flex; gap: 10px; }
+.shift-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 12px;
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+  cursor: pointer;
+  text-align: left;
+}
+.shift-card.active { border-color: var(--primary); background: #fbeff0; }
+.shift-card .s-title { font-size: 16px; font-weight: 700; color: var(--text); }
+.s-status { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 12px; }
+.s-status.pending { background: #fef3c7; color: #b45309; }
+.s-status.done { background: #dcfce7; color: #15803d; }
+
+.totals-head { font-size: 13px; font-weight: 700; color: var(--muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: .3px; }
+
+/* Emri i ditës nën datën */
+.date-dayname { font-size: 13.5px; color: var(--primary); font-weight: 700; margin-top: 6px; }
+
+/* Rreshti "Totali i dorëzuar" (cash) */
+.total-row.handover { border-top: 1px dashed var(--border); margin-top: 6px; padding-top: 10px; font-size: 15px; }
+.total-row.handover b { color: var(--primary); font-weight: 800; font-size: 17px; }
+
+/* Pazari ditor */
+.daily-total h2 { margin: 0 0 10px; font-size: 16px; }
+.daily-total.complete { border: 2px solid var(--primary); }
+.daily-total.complete .total-row.net b { color: var(--primary); font-size: 22px; }
+.daily-total .total-row {
+  display: flex; justify-content: space-between; padding: 7px 0; font-size: 15px;
+}
+.daily-total .total-row.net {
+  border-top: 2px solid var(--border); margin-top: 4px; padding-top: 12px;
+  font-size: 18px; font-weight: 700;
+}
+.daily-total.waiting, .daily-total.empty-day { background: #f8fafc; }
+
+/* Nën-etiketat "(para/pas shpenzimeve)" */
+.total-row span small {
+  display: block; font-weight: 400; font-size: 11px; color: var(--muted); margin-top: 1px;
+}
+
+/* Rreshtat dinamik */
+.line-item {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.line-item .grow { flex: 1; }
+.line-item .amount { width: 90px; }
+/* Sa para ka bërë kamarieri — më e madhe dhe e theksuar */
+.line-item .w-amount {
+  width: 118px;
+  font-size: 21px;
+  font-weight: 700;
+  color: var(--primary);
+  text-align: right;
+}
+.btn-del {
+  border: none;
+  background: #fee2e2;
+  color: var(--danger);
+  border-radius: 10px;
+  width: 44px;
+  min-width: 44px;
+  height: 46px;
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.hint { margin: -4px 0 10px; font-size: 12.5px; color: var(--muted); line-height: 1.4; }
+
+/* Blloku i puntorit */
+.worker-block {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px;
+  margin-bottom: 12px;
+  background: #f8fafc;
+}
+.worker-block .worker-expenses { margin-top: 4px; }
+
+/* Blloku i puntorit — pjesë të qarta */
+.wb-namerow { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.wb-row2 { display: flex; gap: 10px; margin-bottom: 12px; }
+.wb-field { flex: 1; }
+.wb-field label { display: block; font-size: 12px; font-weight: 700; color: var(--muted); margin-bottom: 5px; }
+.wb-field input { width: 100%; text-align: right; }
+.wb-field .w-amount { font-size: 20px; font-weight: 800; color: var(--primary); }
+.wb-field .w-ngarkesa { font-size: 17px; font-weight: 700; color: var(--text); }
+
+.wb-exp-section {
+  border-top: 1px dashed var(--border);
+  padding-top: 10px; margin-bottom: 6px;
+}
+.wb-exp-label { font-size: 12px; font-weight: 700; color: var(--muted); margin-bottom: 8px; }
+
+.pos-amt { color: var(--green); }
+.wd-ngarkesa .wd-exp-note { color: var(--text); }
+
+.w-net-calc { font-size: 11.5px; color: var(--muted); text-align: right; margin-top: 2px; }
+.worker-block .expense-item { background: #fff; }
+
+/* Palosje e puntorit te perfunduar */
+.worker-summary { display: none; }
+.worker-block.collapsed { padding: 0; background: #fbeff0; border-color: var(--primary); }
+.worker-block.collapsed .worker-body { display: none; }
+.worker-block.collapsed .worker-summary {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; padding: 12px; cursor: pointer;
+}
+.worker-summary .ws-info { font-size: 14px; color: var(--text); overflow: hidden; }
+.worker-summary .ws-name { font-weight: 700; }
+.worker-summary .ws-sub { color: var(--muted); }
+.worker-summary .ws-edit {
+  flex-shrink: 0; border: 1px solid var(--border); background: #fff;
+  color: var(--primary); border-radius: 8px; padding: 7px 10px;
+  font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.btn-done-worker {
+  width: 100%; margin-top: 8px; padding: 10px;
+  border: none; border-radius: 8px;
+  background: var(--primary); color: #fff;
+  font-size: 14px; font-weight: 600; cursor: pointer;
+}
+.btn-done-worker:active { background: var(--primary-dark); }
+.btn-add-sm {
+  width: 100%;
+  padding: 8px;
+  border: 1px dashed var(--muted);
+  background: transparent;
+  color: var(--muted);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-bottom: 8px;
+}
+.worker-net {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 4px 2px; border-top: 1px dashed var(--border);
+  font-size: 14px; font-weight: 600;
+}
+.worker-net b { color: var(--green); font-size: 15px; }
+
+.expense-item {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px;
+  margin-bottom: 10px;
+  background: #f8fafc;
+}
+.expense-item .row { margin-bottom: 8px; }
+.expense-item .row:last-child { margin-bottom: 0; }
+
+.photo-strip { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.photo-thumb {
+  position: relative;
+  width: 56px; height: 56px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.photo-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.photo-thumb .x {
+  position: absolute; top: 0; right: 0;
+  background: rgba(0,0,0,.6); color: #fff;
+  width: 18px; height: 18px; line-height: 18px;
+  text-align: center; font-size: 12px; border-bottom-left-radius: 6px;
+}
+
+.photo-actions { display: flex; gap: 8px; }
+.btn-photo {
+  flex: 1;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 11px 12px; border: 1px dashed var(--primary);
+  background: #fbeff0; color: var(--primary);
+  border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer;
+  text-align: center;
+}
+.btn-photo.alt { border-color: var(--muted); background: #f8fafc; color: var(--muted); }
+.btn-photo input { display: none; }
+
+.btn-add {
+  width: 100%;
+  padding: 12px;
+  border: 1px dashed var(--primary);
+  background: transparent;
+  color: var(--primary);
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Totalet */
+.totals .total-row {
+  display: flex; justify-content: space-between;
+  padding: 8px 0; font-size: 15px;
+}
+.totals .total-row.net {
+  border-top: 2px solid var(--border);
+  margin-top: 4px; padding-top: 12px;
+  font-size: 18px; font-weight: 700;
+}
+.totals .net b { color: var(--green); }
+
+.actions { display: flex; gap: 10px; margin-bottom: 20px; }
+.btn-primary {
+  flex: 1;
+  padding: 15px;
+  border: none;
+  background: var(--primary);
+  color: #fff;
+  border-radius: 12px;
+  font-size: 17px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.btn-primary:active { background: var(--primary-dark); }
+.btn-ghost {
+  padding: 15px 18px;
+  border: 1px solid var(--border);
+  background: #fff;
+  border-radius: 12px;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+/* Historiku */
+.filter-card .chips { display: flex; gap: 8px; margin-bottom: 12px; }
+.chip {
+  flex: 1; padding: 10px; border: 1px solid var(--border);
+  background: #fff; border-radius: 20px; font-size: 14px; font-weight: 600;
+  color: var(--muted); cursor: pointer;
+}
+.chip.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+.day-group { margin-bottom: 16px; }
+.day-header {
+  font-size: 14px; font-weight: 700; color: var(--muted);
+  padding: 2px 4px 8px; text-transform: capitalize;
+}
+
+.entry-card { position: relative; }
+.entry-card .badge {
+  display: inline-block; font-size: 12px; font-weight: 700;
+  padding: 3px 10px; border-radius: 20px; margin-bottom: 8px;
+}
+.badge.dita { background: #fef3c7; color: #b45309; }
+.badge.nata { background: #e0e7ff; color: #4338ca; }
+.badge.mgr { background: #dcfce7; color: #15803d; margin-left: 6px; }
+
+.mini-net { display: flex; justify-content: space-between; align-items: baseline; }
+.mini-net .val { font-size: 20px; font-weight: 700; color: var(--green); }
+.mini-net .val.neg { color: var(--danger); }
+.mini-sub { font-size: 13px; color: var(--muted); margin-top: 2px; }
+.mini-names { font-size: 13px; color: var(--text); margin-top: 4px; font-weight: 600; }
+
+/* Karta kompakte e historikut (një ditë) */
+.entry-card.compact { cursor: pointer; }
+.entry-card.compact:active { background: #f8fafc; }
+.tap-hint { font-size: 12px; color: var(--primary); margin-top: 8px; font-weight: 600; }
+.day-card-date { font-size: 16px; font-weight: 700; margin-bottom: 8px; text-transform: capitalize; }
+.day-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.day-badges .badge { font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 20px; }
+.badge.pending { background: #fef3c7; color: #b45309; }
+
+/* Detaji i ditës — ndërrimet e ndara */
+.shift-block { border: 1px solid var(--border); border-radius: 14px; padding: 12px; margin-top: 14px; background: #fbfafb; }
+.shift-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; }
+.shift-head .badge { font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 20px; }
+.shift-net { margin-left: auto; font-weight: 800; color: var(--green); }
+.shift-net.neg { color: var(--danger); }
+.shift-block h4 { margin: 12px 2px 8px; }
+.shift-block .sheet-actions { margin-top: 12px; }
+.shift-missing { margin-top: 14px; padding: 12px; border: 1px dashed var(--border); border-radius: 12px; color: var(--muted); text-align: center; font-size: 14px; }
+
+/* ===== Paneli i detajeve (bottom sheet) ===== */
+.sheet { position: fixed; inset: 0; z-index: 40; }
+.sheet.hidden { display: none; }
+.sheet-bg { position: absolute; inset: 0; background: rgba(15,23,42,.5); }
+.sheet-body {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  max-height: 92vh; overflow-y: auto;
+  background: var(--bg);
+  border-radius: 18px 18px 0 0;
+  padding: 16px 14px calc(24px + env(safe-area-inset-bottom));
+  box-shadow: 0 -4px 20px rgba(0,0,0,.25);
+  animation: sheetUp .22s ease;
+}
+@keyframes sheetUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+.sheet-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+.sheet-date { font-size: 17px; font-weight: 700; margin-bottom: 6px; }
+.sheet-badges .badge { font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 20px; }
+.sheet-close {
+  border: none; background: #fff; border-radius: 50%;
+  width: 36px; height: 36px; font-size: 18px; color: var(--muted);
+  cursor: pointer; box-shadow: var(--shadow); flex-shrink: 0;
+}
+
+.sheet-net {
+  display: flex; justify-content: space-between; align-items: center;
+  background: #fff; border-radius: 12px; padding: 14px; box-shadow: var(--shadow);
+}
+.sheet-net span { font-size: 15px; color: var(--muted); }
+.sheet-net b { font-size: 26px; font-weight: 800; color: var(--green); }
+.sheet-net b.neg { color: var(--danger); }
+
+.detail-totals { display: flex; gap: 10px; margin: 10px 0 4px; }
+.detail-totals > div {
+  flex: 1; background: #fff; border-radius: 12px; padding: 10px 12px;
+  display: flex; flex-direction: column; box-shadow: var(--shadow);
+}
+.detail-totals span { font-size: 12px; color: var(--muted); }
+.detail-totals b { font-size: 17px; font-weight: 700; margin-top: 2px; }
+
+.sheet-body h4 { margin: 16px 4px 8px; font-size: 14px; color: var(--muted); }
+
+/* Kartat e puntoreve ne detaje */
+.wd-card { background: #fff; border-radius: 12px; padding: 12px; margin-bottom: 10px; box-shadow: var(--shadow); }
+.wd-top { display: flex; justify-content: space-between; align-items: baseline; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+.wd-name { font-size: 17px; font-weight: 700; }
+.wd-made { font-size: 14px; color: var(--muted); }
+.wd-made b { color: var(--text); }
+.wd-exp { padding: 8px 0; border-bottom: 1px dashed var(--border); }
+.wd-exp.standalone { background: #fff; border-radius: 12px; padding: 12px; margin-bottom: 8px; border-bottom: none; box-shadow: var(--shadow); }
+.wd-exp-row { display: flex; justify-content: space-between; align-items: baseline; font-size: 14px; }
+.wd-exp-note { color: var(--text); }
+.wd-exp-note .cat { font-size: 11px; color: var(--muted); background: #f1f5f9; padding: 1px 7px; border-radius: 10px; margin-left: 4px; }
+.wd-noexp { font-size: 13px; color: var(--muted); padding: 6px 0; }
+.wd-net { display: flex; justify-content: space-between; align-items: center; padding-top: 8px; font-size: 15px; font-weight: 700; }
+.wd-net span { color: var(--muted); font-weight: 600; font-size: 13px; }
+.wd-net b { color: var(--green); font-size: 18px; }
+
+.sheet-note { background: #fff; border-radius: 12px; padding: 12px; font-size: 14px; box-shadow: var(--shadow); }
+
+.sheet-actions { display: flex; gap: 10px; margin-top: 18px; }
+.sheet-actions button { flex: 1; padding: 13px; font-size: 15px; }
+.sheet-actions .del { color: var(--danger); border-color: #fecaca; background: #fef2f2; }
+
+.photo-strip.big { margin-top: 8px; }
+.photo-strip.big .photo-thumb { width: 84px; height: 84px; }
+
+.detail { margin-top: 10px; border-top: 1px solid var(--border); padding-top: 10px; display: none; }
+.entry-card.open .detail { display: block; }
+.detail h4 { margin: 8px 0 4px; font-size: 13px; color: var(--muted); }
+.detail-line {
+  display: flex; justify-content: space-between;
+  font-size: 14px; padding: 4px 0; border-bottom: 1px dashed var(--border);
+}
+.detail-line:last-child { border-bottom: none; }
+.detail-line .lbl { color: var(--text); }
+.detail-line .cat { font-size: 11px; color: var(--muted); }
+.detail-line.sub { padding-left: 6px; }
+.detail-line.sub .lbl { color: var(--muted); font-size: 13px; }
+.neg-amt { color: var(--danger); }
+
+.worker-detail {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 6px 10px;
+  margin-bottom: 8px;
+  background: #f8fafc;
+}
+.detail-line.worker-head { border-bottom: 1px solid var(--border); }
+.detail-line.worker-head .lbl { font-size: 15px; }
+.detail-line.wnet { border-bottom: none; }
+.detail-line.wnet .lbl { color: var(--muted); font-size: 13px; }
+.detail-line.wnet b { color: var(--green); }
+
+.entry-actions { display: flex; gap: 8px; margin-top: 10px; }
+.entry-actions button {
+  flex: 1; padding: 10px; border-radius: 10px; font-size: 14px;
+  font-weight: 600; cursor: pointer; border: 1px solid var(--border); background: #fff;
+}
+.entry-actions .del { color: var(--danger); border-color: #fecaca; background: #fef2f2; }
+
+.empty { text-align: center; color: var(--muted); padding: 40px 20px; }
+
+/* Modal foto */
+.modal { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; }
+.modal.hidden { display: none; }
+.modal-bg { position: absolute; inset: 0; background: rgba(0,0,0,.85); }
+.modal img { position: relative; max-width: 94%; max-height: 90%; border-radius: 8px; }
+
+.hidden { display: none !important; }
+
+/* Toast */
+.toast {
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+  background: #0f172a; color: #fff; padding: 12px 20px; border-radius: 24px;
+  font-size: 14px; z-index: 60; box-shadow: 0 4px 12px rgba(0,0,0,.3);
+}

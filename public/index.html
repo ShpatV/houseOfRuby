@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="sq">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#6e1622" />
+  <title>House of Ruby — Barazimet</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+  <link rel="manifest" href="manifest.json" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="House of Ruby" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- ======= EKRANI I HYRJES (LOGIN) ======= -->
+  <div id="login-screen" class="login-screen">
+    <div class="login-brand">
+      <img class="logo-full" src="logo-full.png" alt="House of Ruby" />
+    </div>
+    <div class="al-card">
+      <p class="al-sub">Barazimet · Hyr me llogarinë tënde</p>
+      <input type="text" id="login-user" autocomplete="username" placeholder="Përdoruesi (p.sh. Dardani)" />
+      <input type="password" id="login-pass" autocomplete="current-password" placeholder="Fjalëkalimi" />
+      <button id="login-btn" class="btn-primary">Hyr</button>
+      <div id="login-msg" class="al-msg"></div>
+    </div>
+  </div>
+
+  <!-- ======= APLIKACIONI (pas hyrjes) ======= -->
+  <div id="app" class="hidden">
+  <header class="topbar">
+    <div class="brand">
+      <img class="topbar-logo" src="logo-mark.png" alt="" />
+      <span class="brand-name">HOUSE <span>of</span> RUBY</span>
+    </div>
+    <button id="user-chip" class="user-chip">👤 <span id="user-name"></span></button>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab active" data-tab="new">➕ Barazim i Ri</button>
+    <button class="tab" data-tab="history">📅 Historiku</button>
+  </nav>
+
+  <main>
+    <!-- ============ BARAZIM I RI ============ -->
+    <section id="tab-new" class="tab-panel active">
+      <div class="card">
+        <div class="field">
+          <label>Data</label>
+          <input type="date" id="date" required />
+          <div id="date-dayname" class="date-dayname"></div>
+        </div>
+        <label class="lbl-top">Zgjidh ndërrimin</label>
+        <div class="shift-switch">
+          <button type="button" class="shift-card active" data-shift="dita">
+            <span class="s-title">☀️ Dita</span>
+            <span class="s-status pending" id="status-dita">I papërfunduar</span>
+          </button>
+          <button type="button" class="shift-card" data-shift="nata">
+            <span class="s-title">🌙 Nata</span>
+            <span class="s-status pending" id="status-nata">I papërfunduar</span>
+          </button>
+        </div>
+      </div>
+
+      <div id="lock-banner" class="lock-banner hidden"></div>
+
+      <form id="entry-form">
+        <input type="hidden" id="entry-id" />
+
+        <div class="card">
+          <div class="field">
+            <label>Menaxheri (kush e bëri këtë barazim)</label>
+            <input type="text" id="manager" list="managers-list" placeholder="Emri i menaxherit" />
+            <datalist id="managers-list"></datalist>
+          </div>
+        </div>
+
+        <!-- Puntoret me shpenzimet e tyre -->
+        <div class="card">
+          <h2>👤 Puntorët & shpenzimet e tyre</h2>
+          <p class="hint">Për secilin puntor shëno sa ka bërë dhe çfarë shpenzimesh ka pasur (me foto të faturës).</p>
+          <div id="workers-list"></div>
+          <button type="button" class="btn-add" id="add-worker">+ Shto puntor</button>
+        </div>
+
+        <!-- Shpenzime te pergjithshme (opsionale) -->
+        <div class="card">
+          <h2>🧾 Shpenzime të përgjithshme</h2>
+          <p class="hint">Opsionale — vetëm shpenzime që s'i takojnë një puntori (p.sh. qira, rryma).</p>
+          <div id="expenses-list"></div>
+          <button type="button" class="btn-add" id="add-expense">+ Shto shpenzim</button>
+        </div>
+
+        <!-- Shenime -->
+        <div class="card">
+          <h2>📝 Shënime</h2>
+          <textarea id="note" rows="2" placeholder="Shënime shtesë (opsionale)"></textarea>
+        </div>
+
+        <!-- Totalet e ketij nderrimi -->
+        <div class="card totals">
+          <div class="totals-head" id="totals-head">Totali i këtij ndërrimi</div>
+          <div class="total-row"><span>Bruto <small>(para shpenzimeve)</small></span><b id="t-income">0.00 €</b></div>
+          <div class="total-row"><span>Shpenzimet</span><b id="t-expense">0.00 €</b></div>
+          <div class="total-row net"><span>Neto <small>(pas shpenzimeve)</small></span><b id="t-net">0.00 €</b></div>
+          <div class="total-row handover"><span>💵 Totali i dorëzuar <small>(cash nga puntorët)</small></span><b id="t-handover">0.00 €</b></div>
+        </div>
+
+        <div class="actions">
+          <button type="submit" class="btn-primary" id="save-btn">💾 Ruaj Barazimin e Ditës</button>
+          <button type="button" class="btn-ghost" id="cancel-edit">🧹 Pastro</button>
+        </div>
+      </form>
+
+      <!-- Pazari ditor (komplet) -->
+      <div class="card daily-total" id="daily-total"></div>
+    </section>
+
+    <!-- ============ HISTORIKU ============ -->
+    <section id="tab-history" class="tab-panel">
+      <div class="card filter-card">
+        <div class="chips">
+          <button class="chip active" data-range="week">Kjo javë</button>
+          <button class="chip" data-range="month">Ky muaj</button>
+          <button class="chip" data-range="all">Të gjitha</button>
+        </div>
+        <div class="row">
+          <div class="field"><label>Nga</label><input type="date" id="f-from" /></div>
+          <div class="field"><label>Deri</label><input type="date" id="f-to" /></div>
+        </div>
+      </div>
+      <div id="history-list"></div>
+    </section>
+  </main>
+  </div><!-- /#app -->
+
+  <!-- Menuja e perdoruesit (ndrysho fjalekalimin / dil) -->
+  <div id="user-modal" class="sheet hidden">
+    <div class="sheet-bg" onclick="closeUserModal()"></div>
+    <div class="sheet-body">
+      <div class="sheet-head">
+        <div>
+          <div class="sheet-date">👤 <span id="um-name"></span></div>
+        </div>
+        <button class="sheet-close" onclick="closeUserModal()">✕</button>
+      </div>
+
+      <h4>🔑 Ndrysho fjalëkalimin</h4>
+      <div class="card">
+        <div class="field"><label>Fjalëkalimi aktual</label><input type="password" id="pw-old" autocomplete="current-password" /></div>
+        <div class="field"><label>Fjalëkalimi i ri</label><input type="password" id="pw-new" autocomplete="new-password" /></div>
+        <div class="field"><label>Përsërit fjalëkalimin e ri</label><input type="password" id="pw-new2" autocomplete="new-password" /></div>
+        <button id="pw-save" class="btn-primary" style="width:100%">Ruaj fjalëkalimin e ri</button>
+        <div id="pw-msg" class="al-msg"></div>
+      </div>
+
+      <div id="admin-reset" class="hidden">
+        <h4>👥 Përdoruesit</h4>
+        <div id="user-list" class="user-list"></div>
+
+        <h4>➕ Shto përdorues të ri</h4>
+        <div class="card">
+          <div class="field"><label>Emri</label><input type="text" id="au-name" placeholder="p.sh. Driton" /></div>
+          <div class="field"><label>Fjalëkalimi fillestar</label><input type="text" id="au-pass" value="1234" /></div>
+          <button id="au-save" class="btn-primary" style="width:100%">Shto përdoruesin</button>
+          <div id="au-msg" class="al-msg"></div>
+        </div>
+
+        <h4>🔑 Rivendos fjalëkalimin e një përdoruesi</h4>
+        <div class="card">
+          <div class="field"><label>Përdoruesi</label><select id="ar-user"></select></div>
+          <div class="field"><label>Fjalëkalimi i ri</label><input type="text" id="ar-pass" value="1234" /></div>
+          <button id="ar-save" class="btn-primary" style="width:100%">Rivendos fjalëkalimin</button>
+          <div id="ar-msg" class="al-msg"></div>
+        </div>
+
+        <h4>🧾 Regjistri i veprimeve</h4>
+        <div id="audit-log" class="audit-log"></div>
+      </div>
+
+      <div class="sheet-actions">
+        <button class="btn-ghost del" id="logout-btn">🚪 Dil nga llogaria</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Panel me detaje (vetem shikim) -->
+  <div id="detail-modal" class="sheet hidden">
+    <div class="sheet-bg" onclick="closeDetail()"></div>
+    <div class="sheet-body" id="detail-body"></div>
+  </div>
+
+  <!-- Modal per foto -->
+  <div id="photo-modal" class="modal hidden">
+    <div class="modal-bg"></div>
+    <img id="photo-modal-img" src="" alt="Fatura" />
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

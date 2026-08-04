@@ -1,0 +1,14 @@
+{
+  "name": "House of Ruby — Barazimet",
+  "short_name": "House of Ruby",
+  "description": "Barazimet ditore të restorantit House of Ruby",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#4d121a",
+  "theme_color": "#6e1622",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
