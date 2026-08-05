@@ -27,18 +27,19 @@ function isLocked(dateStr) {
 
 // ---------- Supabase: barazimet (entries) ----------
 async function rowToEntry(row) {
-  return row ? { id: row.id, ...row.data } : null;
+  // date/shift janë kolona — riktheji në objekt që fronti t'i ketë
+  return row ? { id: row.id, date: row.date, shift: row.shift, ...row.data } : null;
 }
 async function selectEntryById(id) {
-  const { data } = await supabase.from('entries').select('id,data').eq('id', id).maybeSingle();
+  const { data } = await supabase.from('entries').select('id,date,shift,data').eq('id', id).maybeSingle();
   return rowToEntry(data);
 }
 async function selectEntryByDateShift(date, shift) {
-  const { data } = await supabase.from('entries').select('id,data').eq('date', date).eq('shift', shift).maybeSingle();
+  const { data } = await supabase.from('entries').select('id,date,shift,data').eq('date', date).eq('shift', shift).maybeSingle();
   return rowToEntry(data);
 }
 async function selectAllEntries({ from, to } = {}) {
-  let q = supabase.from('entries').select('id,data').order('date', { ascending: false });
+  let q = supabase.from('entries').select('id,date,shift,data').order('date', { ascending: false });
   if (from) q = q.gte('date', from);
   if (to) q = q.lte('date', to);
   const { data, error } = await q;
