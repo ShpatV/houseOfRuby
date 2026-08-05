@@ -20,6 +20,46 @@ function toast(msg) {
   toast._t = setTimeout(() => t.classList.add('hidden'), 2200);
 }
 
+// ---------- Gjendjet e ngarkimit (loading) ----------
+let _pending = 0;
+function beginLoad() { _pending++; const p = $('#progress'); if (p) p.classList.add('on'); }
+function endLoad() { _pending = Math.max(0, _pending - 1); if (!_pending) { const p = $('#progress'); if (p) p.classList.remove('on'); } }
+
+// Buton në gjendje "duke u përpunuar": e çaktivizon + i vë spinner
+function busy(btn, on, label = '…') {
+  if (!btn) return;
+  if (on) {
+    if (!btn.dataset.label) btn.dataset.label = btn.innerHTML;
+    btn.disabled = true;
+    btn.classList.add('busy');
+    btn.innerHTML = `<span class="spinner"></span>${label}`;
+  } else {
+    btn.disabled = false;
+    btn.classList.remove('busy');
+    if (btn.dataset.label) btn.innerHTML = btn.dataset.label;
+    delete btn.dataset.label;
+  }
+}
+
+// Bllok i thjeshtë me spinner + tekst
+function loadBlock(text = 'Duke ngarkuar…') {
+  return `<div class="load-block"><span class="spinner dark"></span><span>${text}</span></div>`;
+}
+
+// Karta skeleton (shimmer) për listat
+function skeletonCards(n = 3) {
+  let h = '';
+  for (let i = 0; i < n; i++) {
+    h += `<div class="skel-card">
+      <div class="skel-line skeleton w40"></div>
+      <div class="skel-line skeleton w80"></div>
+      <div class="skel-line skeleton w60"></div>
+      <div class="skel-line skeleton w30"></div>
+    </div>`;
+  }
+  return h;
+}
+
 const CATEGORIES = ['Kuzhina', 'Pije', 'Mishi', 'Perime/Fruta', 'Rroga', 'Qira', 'Rryma/Uji', 'Pastrim', 'Tjera'];
 
 // Rrumbullakon fushën në 2 shifra kur del prej saj (blur), pa e prekur bosh
@@ -119,7 +159,7 @@ function workerBlock(w = { name: '', amount: '', expenses: [] }, collapsed = fal
     updateWorkerSummary(div);
     div.classList.add('collapsed');
     div.scrollIntoView({ block: 'center' }); // qëndro te puntorët, mos shko në fund
-    autoSave(); // ruaj automatikisht (mbrojtje nga refresh-i)
+    autoSave(div.querySelector('.btn-done-worker')); // ruaj automatikisht (mbrojtje nga refresh-i)
   });
   // Rihapet VETËM me butonin "Ndrysho" (jo gjithë rreshti)
   div.querySelector('.ws-edit').addEventListener('click', () => div.classList.remove('collapsed'));
@@ -189,7 +229,14 @@ function expenseRow(x = { category: 'Kuzhina', note: '', amount: '', photos: [] 
   async function handlePhotos(e) {
     const files = [...e.target.files];
     if (!files.length) return;
-    toast('Duke ngarkuar foton...');
+    const btns = div.querySelectorAll('.btn-photo');
+    const t = $('#toast');
+    btns.forEach(b => b.classList.add('busy'));
+    t.classList.add('loading');
+    toast('Duke ngarkuar foton…');
+    const ph = document.createElement('div');
+    ph.className = 'photo-thumb skeleton';
+    strip.appendChild(ph);
     const fd = new FormData();
     files.forEach(f => fd.append('photos', f));
     try {
@@ -200,6 +247,10 @@ function expenseRow(x = { category: 'Kuzhina', note: '', amount: '', photos: [] 
       toast('Foto u shtua ✓');
     } catch (err) {
       toast('Gabim gjatë ngarkimit');
+    } finally {
+      if (ph.parentNode) ph.parentNode.removeChild(ph);
+      t.classList.remove('loading');
+      btns.forEach(b => b.classList.remove('busy'));
     }
     e.target.value = '';
   }
@@ -257,18 +308,20 @@ $('#add-worker').addEventListener('click', () => {
 $('#add-expense').addEventListener('click', () => { $('#expenses-list').appendChild(expenseRow()); });
 
 // Ruajtje automatike (thirret kur përfundohet një puntor) — pa reset, pa scroll
-async function autoSave() {
+async function autoSave(btn) {
   const payload = collectForm();
   if (!payload.date) return;
-  const id = $('#entry-id').value;
-  const url = id ? '/api/entries/' + id : '/api/entries';
-  const method = id ? 'PUT' : 'POST';
+  busy(btn, true, 'Duke u ruajtur…');
   try {
+    const id = $('#entry-id').value;
+    const url = id ? '/api/entries/' + id : '/api/entries';
+    const method = id ? 'PUT' : 'POST';
     const res = await apiFetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     if (res.status === 403) return; // i mbyllur — s'ruhet automatikisht
     if (res.ok) { const d = await res.json(); $('#entry-id').value = d.entry.id; clearDraft(); refreshDay(); toast('U ruajt ✓'); }
     else { saveDraft(payload); toast('⚠️ S\'u ruajt — provo prapë (shtyp Ruaj)'); }
   } catch (e) { saveDraft(payload); toast('⚠️ S\'u ruajt — kontrollo internetin dhe shtyp Ruaj'); }
+  finally { busy(btn, false); }
 }
 
 // ---------- Ruajtja e formes ----------
@@ -307,7 +360,8 @@ $('#entry-form').addEventListener('submit', async e => {
   const id = $('#entry-id').value;
   const url = id ? '/api/entries/' + id : '/api/entries';
   const method = id ? 'PUT' : 'POST';
-  $('#save-btn').disabled = true;
+  const saveBtn = $('#save-btn');
+  busy(saveBtn, true, 'Duke u ruajtur…');
   try {
     const res = await apiFetch(url, {
       method,
@@ -330,7 +384,9 @@ $('#entry-form').addEventListener('submit', async e => {
     saveDraft(payload); // mos e humb — ruaje lokalisht
     toast('⚠️ S\'u ruajt — kontrollo internetin dhe provo prapë');
   } finally {
-    $('#save-btn').disabled = false;
+    busy(saveBtn, false);
+    setSaveLabel(); // rikthe etiketën e ndërrimit aktual
+    updateLockBanner();
   }
 });
 
@@ -434,10 +490,18 @@ async function loadCurrentShift() {
   updateDayName();
   const date = $('#date').value;
   if (!date) { clearForm(); return; }
-  const entries = await fetchEntries(date, date);
-  const entry = entries.find(e => e.shift === currentShift);
-  if (entry) populateForm(entry); else clearForm();
-  refreshDay(entries);
+  const lists = [$('#workers-list'), $('#expenses-list')];
+  const prev = lists.map(el => el.innerHTML);
+  lists.forEach(el => { el.innerHTML = '<div class="skel-line skeleton tall" style="margin-bottom:10px"></div><div class="skel-line skeleton tall"></div>'; });
+  try {
+    const entries = await fetchEntries(date, date);
+    const entry = entries.find(e => e.shift === currentShift);
+    if (entry) populateForm(entry); else clearForm();
+    refreshDay(entries);
+  } catch (e) {
+    lists.forEach((el, i) => el.innerHTML = prev[i]);
+    toast('⚠️ S\'u ngarkua — provo prapë');
+  }
   updateLockBanner();
   checkDraft();
 }
@@ -550,12 +614,18 @@ const photoStrip = (photos, big) => (photos && photos.length)
 
 async function loadHistory() {
   const { from, to } = rangeDates();
-  const qs = new URLSearchParams();
-  if (from) qs.set('from', from);
-  if (to) qs.set('to', to);
-  const res = await apiFetch('/api/entries?' + qs.toString());
-  const { entries } = await res.json();
-  renderHistory(entries);
+  const wrap = $('#history-list');
+  wrap.innerHTML = skeletonCards(3);
+  try {
+    const qs = new URLSearchParams();
+    if (from) qs.set('from', from);
+    if (to) qs.set('to', to);
+    const res = await apiFetch('/api/entries?' + qs.toString());
+    const { entries } = await res.json();
+    renderHistory(entries);
+  } catch (e) {
+    wrap.innerHTML = '<div class="load-block"><span>⚠️ Nuk u ngarkua historiku — provo prapë</span></div>';
+  }
 }
 
 function renderHistory(entries) {
@@ -599,7 +669,7 @@ function dayCard(date, entries) {
   else if (nata && !dita) pending = '☀️ Dita mungon';
 
   const card = document.createElement('div');
-  card.className = 'card entry-card compact';
+  card.className = 'card entry-card compact fade-in';
   card.innerHTML = `
     <div class="day-card-date">${formatDate(date)}</div>
     <div class="day-badges">
@@ -701,7 +771,11 @@ function openDayDetail(date, entries) {
     ${section(nata, '🌙 Barazimi i Natës')}`;
 
   const modal = $('#detail-modal');
+  const body = $('#detail-body');
+  body.classList.remove('fade-in');
   modal.classList.remove('hidden');
+  void body.offsetWidth; // rikthe animacionin fade-in
+  body.classList.add('fade-in');
   $('#detail-close').addEventListener('click', closeDetail);
   $('#detail-body').querySelectorAll('.photo-thumb img').forEach(img => {
     img.addEventListener('click', () => openPhoto(img.dataset.full));
@@ -712,7 +786,7 @@ function openDayDetail(date, entries) {
     const eb = block.querySelector('.edit');
     const db = block.querySelector('.del');
     if (eb) eb.addEventListener('click', () => { closeDetail(); editEntry(e); });
-    if (db) db.addEventListener('click', () => deleteEntry(e.id));
+    if (db) db.addEventListener('click', () => deleteEntry(e.id, db));
   });
 }
 
@@ -732,16 +806,21 @@ function actionsHtml(e) {
 
 function closeDetail() { $('#detail-modal').classList.add('hidden'); }
 
-async function deleteEntry(id) {
+async function deleteEntry(id, btn) {
   if (!confirm('Të fshihet ky barazim?')) return;
-  const res = await apiFetch('/api/entries/' + id, { method: 'DELETE' });
-  if (res.status === 403) {
-    const d = await res.json().catch(() => ({}));
-    return toast(d.error || 'I mbyllur për ndryshim');
+  busy(btn, true, '');
+  try {
+    const res = await apiFetch('/api/entries/' + id, { method: 'DELETE' });
+    if (res.status === 403) {
+      const d = await res.json().catch(() => ({}));
+      return toast(d.error || 'I mbyllur për ndryshim');
+    }
+    toast('U fshi');
+    closeDetail();
+    loadHistory();
+  } finally {
+    busy(btn, false);
   }
-  toast('U fshi');
-  closeDetail();
-  loadHistory();
 }
 
 function editEntry(e) {
@@ -799,10 +878,15 @@ function authHeaders() { return token ? { 'x-session-token': token } : {}; }
 
 // Wrapper për të gjitha thirrjet /api — shton token-in dhe kap 401 (sesion i skaduar)
 async function apiFetch(url, opts = {}) {
-  const headers = { ...(opts.headers || {}), ...authHeaders() };
-  const res = await fetch(url, { ...opts, headers });
-  if (res.status === 401) { doLogout(true); throw new Error('unauth'); }
-  return res;
+  beginLoad();
+  try {
+    const headers = { ...(opts.headers || {}), ...authHeaders() };
+    const res = await fetch(url, { ...opts, headers });
+    if (res.status === 401) { doLogout(true); throw new Error('unauth'); }
+    return res;
+  } finally {
+    endLoad();
+  }
 }
 
 function updateLockBanner() {
@@ -838,8 +922,9 @@ async function doLogin() {
   const password = $('#login-pass').value;
   const msg = $('#login-msg');
   if (!username || !password) { msg.className = 'al-msg err'; msg.textContent = 'Plotëso përdoruesin dhe fjalëkalimin.'; return; }
-  $('#login-btn').disabled = true;
+  busy($('#login-btn'), true, 'Po hy…');
   msg.textContent = '';
+  beginLoad();
   try {
     const res = await fetch('/api/login', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -854,7 +939,8 @@ async function doLogin() {
   } catch (e) {
     msg.className = 'al-msg err'; msg.textContent = 'Gabim gjatë hyrjes.';
   } finally {
-    $('#login-btn').disabled = false;
+    endLoad();
+    busy($('#login-btn'), false);
   }
 }
 
@@ -905,10 +991,11 @@ function openUserModal() {
 
 // Regjistri i veprimeve (vetëm admini)
 async function loadAudit() {
+  const el = $('#audit-log');
+  el.innerHTML = '<div class="load-block" style="padding:14px"><span class="spinner dark"></span><span>Duke ngarkuar…</span></div>';
   try {
     const res = await apiFetch('/api/audit');
     const { log } = await res.json();
-    const el = $('#audit-log');
     if (!log.length) { el.innerHTML = '<div class="mini-sub">Ende s\'ka veprime.</div>'; return; }
     el.innerHTML = log.map(a => {
       const d = new Date(a.at);
@@ -918,25 +1005,28 @@ async function loadAudit() {
         : (a.date ? `${a.action} — ${a.date} ${a.shift === 'nata' ? '🌙' : (a.shift === 'dita' ? '☀️' : '')}` : a.action);
       return `<div class="audit-row"><span class="au-when">${when}</span><span class="au-body"><b>${escapeHtml(a.user || '—')}</b> ${what}</span></div>`;
     }).join('');
-  } catch (e) { /* injoro */ }
+  } catch (e) { el.innerHTML = '<div class="mini-sub">S\'u ngarkua regjistri.</div>'; }
 }
 
 async function loadAdminUsers() {
+  const ul = $('#user-list');
+  ul.innerHTML = '<div class="load-block" style="padding:14px"><span class="spinner dark"></span><span>Duke ngarkuar…</span></div>';
+  $('#ar-user').innerHTML = '<option>Duke ngarkuar…</option>';
   try {
     const res = await apiFetch('/api/users');
     const { users } = await res.json();
     // dropdown për rivendosjen e fjalëkalimit
     $('#ar-user').innerHTML = users.map(u => `<option value="${escapeAttr(u.username)}">${escapeHtml(u.name)}</option>`).join('');
     // lista me mundësi fshirjeje
-    $('#user-list').innerHTML = users.map(u => `
+    ul.innerHTML = users.map(u => `
       <div class="user-row">
         <span class="ur-name">${escapeHtml(u.name)}${u.username === currentUser.username ? ' <small>(ti)</small>' : ''}</span>
         ${u.username === currentUser.username ? '' : `<button class="ur-del" data-u="${escapeAttr(u.username)}">🗑️</button>`}
       </div>`).join('');
-    $('#user-list').querySelectorAll('.ur-del').forEach(b => {
-      b.addEventListener('click', () => deleteUser(b.dataset.u, b.closest('.user-row').querySelector('.ur-name').textContent.trim()));
+    ul.querySelectorAll('.ur-del').forEach(b => {
+      b.addEventListener('click', () => deleteUser(b.dataset.u, b.closest('.user-row').querySelector('.ur-name').textContent.trim(), b));
     });
-  } catch (e) { /* injoro */ }
+  } catch (e) { ul.innerHTML = '<div class="mini-sub">S\'u ngarkuan përdoruesit.</div>'; }
 }
 
 async function addUser() {
@@ -945,6 +1035,7 @@ async function addUser() {
   const msg = $('#au-msg');
   if (!name) { msg.className = 'al-msg err'; msg.textContent = 'Shëno emrin.'; return; }
   if (password.length < 4) { msg.className = 'al-msg err'; msg.textContent = 'Fjalëkalimi duhet të ketë të paktën 4 shenja.'; return; }
+  busy($('#au-save'), true, 'Duke u shtuar…');
   try {
     const res = await apiFetch('/api/admin/users', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -958,10 +1049,12 @@ async function addUser() {
     loadAdminUsers();
     refreshManagers();
   } catch (e) { msg.className = 'al-msg err'; msg.textContent = 'Gabim.'; }
+  finally { busy($('#au-save'), false); }
 }
 
-async function deleteUser(username, label) {
+async function deleteUser(username, label, btn) {
   if (!confirm(`Të fshihet përdoruesi "${label}"?`)) return;
+  busy(btn, true, '');
   try {
     const res = await apiFetch('/api/admin/users/' + encodeURIComponent(username), { method: 'DELETE' });
     const d = await res.json().catch(() => ({}));
@@ -969,13 +1062,15 @@ async function deleteUser(username, label) {
     toast('U fshi');
     loadAdminUsers();
   } catch (e) { toast('Gabim'); }
+  finally { busy(btn, false); }
 }
 
 async function resetUserPassword() {
   const username = $('#ar-user').value;
   const newPassword = $('#ar-pass').value;
   const msg = $('#ar-msg');
-  if (newPassword.length < 4) { msg.className = 'al-msg err'; msg.textContent = 'Fjalëkalimi duhet të ketë të paktën 4 shenja.'; return; }
+  if (newPassword.length < 4) { msg.className = 'al-msg err'; msg.textContent = 'Fjalëkalimi i ri duhet të ketë të paktën 4 shenja.'; return; }
+  busy($('#ar-save'), true, 'Duke u rivendosur…');
   try {
     const res = await apiFetch('/api/admin/reset-password', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -986,6 +1081,7 @@ async function resetUserPassword() {
     msg.className = 'al-msg ok';
     msg.textContent = `✓ Fjalëkalimi i ${d.name} u rivendos në "${newPassword}".`;
   } catch (e) { msg.className = 'al-msg err'; msg.textContent = 'Gabim.'; }
+  finally { busy($('#ar-save'), false); }
 }
 function closeUserModal() { $('#user-modal').classList.add('hidden'); }
 
@@ -996,6 +1092,7 @@ async function changePassword() {
   const msg = $('#pw-msg');
   if (newPassword.length < 4) { msg.className = 'al-msg err'; msg.textContent = 'Fjalëkalimi i ri duhet të ketë të paktën 4 shenja.'; return; }
   if (newPassword !== confirm2) { msg.className = 'al-msg err'; msg.textContent = 'Fjalëkalimet e reja nuk përputhen.'; return; }
+  busy($('#pw-save'), true, 'Duke u ruajtur…');
   try {
     const res = await apiFetch('/api/change-password', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1006,6 +1103,7 @@ async function changePassword() {
     msg.className = 'al-msg ok'; msg.textContent = '✓ Fjalëkalimi u ndryshua.';
     $('#pw-old').value = ''; $('#pw-new').value = ''; $('#pw-new2').value = '';
   } catch (e) { msg.className = 'al-msg err'; msg.textContent = 'Gabim.'; }
+  finally { busy($('#pw-save'), false); }
 }
 
 $('#login-btn').addEventListener('click', doLogin);
@@ -1018,7 +1116,10 @@ $('#au-save').addEventListener('click', addUser);
 
 // ---------- Init ----------
 async function init() {
-  if (!token) { showLogin(); return; }
+  const boot = $('#boot');
+  const hideBoot = () => boot.classList.add('hidden');
+  if (!token) { showLogin(); hideBoot(); return; }
+  beginLoad();
   try {
     const res = await fetch('/api/me', { headers: authHeaders() });
     if (!res.ok) { showLogin(); return; }
@@ -1026,5 +1127,6 @@ async function init() {
     currentUser = data.user;
     onLoggedIn();
   } catch (e) { showLogin(); }
+  finally { endLoad(); hideBoot(); }
 }
 init();
